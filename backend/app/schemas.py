@@ -5,11 +5,12 @@ from enum import Enum
 
 
 # ==========================================
-# 0. 7개 표준 카테고리 Enum
+# 0. 8개 표준 카테고리 Enum
 # ==========================================
 class CategoryEnum(str, Enum):
     FOOD = "식비"
     CAFE = "카페·간식"
+    DAILY = "생활·생필품"
     SHOPPING = "쇼핑"
     TRANSPORT = "교통"
     HEALTH = "의료·건강"

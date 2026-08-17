@@ -143,7 +143,7 @@ def delete_receipt(receipt_id: int, db: Session = Depends(get_db)):
 @router.get("/summary/monthly", response_model=schemas.MonthlySummaryResponse)
 def get_monthly_summary(month: str = "2026-08", db: Session = Depends(get_db)):
     """
-    지정한 월(YYYY-MM)의 품목별 지출을 집계하여 7개 카테고리별 금액 및 비중(%) 반환
+    지정한 월(YYYY-MM)의 품목별 지출을 집계하여 8개 카테고리별 금액 및 비중(%) 반환
     """
     receipts = db.query(models.Receipt).filter(models.Receipt.date.startswith(month)).all()
     
