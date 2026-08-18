@@ -2,9 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
 from typing import List, Dict
 from collections import defaultdict
+import shutil
+import tempfile
+import os
 
 from app.database import SessionLocal
 from app import models, schemas
+from ai.receipt_analyzer import analyze_receipt_image
 
 router = APIRouter(prefix="/api/receipts", tags=["Receipts"])
 
@@ -23,28 +27,36 @@ def get_db():
 # ==========================================
 # [기능 ①] AI 영수증 분석 Mock API
 # ==========================================
-@router.post("/analyze-mock", response_model=schemas.ReceiptCreate)
-async def analyze_receipt_mock(file: UploadFile = File(...)):
+@router.post("/analyze", response_model=schemas.ReceiptCreate)
+async def analyze_receipt(file: UploadFile = File(...)):
     """
-    영수증 이미지를 업로드받아 AI가 파싱한 품목/금액/카테고리 결과를 반환 (더미 데이터)
+    영수증 이미지를 업로드받아 실제 AI(OpenAI Vision)로 분석한 결과를 반환
     """
-    return {
-        "store_name": "스타벅스 강남점",
-        "date": "2026-08-16",
-        "total_amount": 13500.0,
-        "items": [
-            {
-                "name": "아이스 아메리카노",
-                "price": 5500.0,
-                "category": schemas.CategoryEnum.CAFE
-            },
-            {
-                "name": "치즈 케이크",
-                "price": 8000.0,
-                "category": schemas.CategoryEnum.CAFE
-            }
+    suffix = os.path.splitext(file.filename)[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = tmp.name
+
+    try:
+        result = analyze_receipt_image(tmp_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI 분석 실패: {str(e)}")
+    finally:
+        os.remove(tmp_path)
+
+    return schemas.ReceiptCreate(
+        store_name=result.store_name,
+        date=result.date,
+        total_amount=result.total_amount,
+        items=[
+            schemas.ReceiptItemCreate(
+                name=item.name,
+                price=item.price,
+                category=schemas.CategoryEnum(item.category.value)
+            )
+            for item in result.items
         ]
-    }
+    )
 
 
 # ==========================================
