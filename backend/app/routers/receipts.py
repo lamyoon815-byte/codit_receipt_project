@@ -9,6 +9,7 @@ import os
 from app.database import SessionLocal
 from app import models, schemas
 from ai.receipt_analyzer import analyze_receipt_image
+from ai.report_generator import generate_ai_report
 
 router = APIRouter(prefix="/api/receipts", tags=["Receipts"])
 
@@ -196,14 +197,23 @@ def get_monthly_summary(month: str = "2026-08", db: Session = Depends(get_db)):
 @router.get("/report/ai", response_model=schemas.AIReportResponse)
 def get_ai_report(month: str = "2026-08", db: Session = Depends(get_db)):
     """
-    누적 소비 데이터를 기반으로 생성한 AI 자연어 소비 리포트 (현재 Mock 반환)
+    누적 소비 데이터를 기반으로 생성한 AI 자연어 소비 리포트
     """
-    return {
-        "month": month,
-        "summary": "이번 달은 외식과 카페 지출 비중이 전체의 61%로 가장 높았습니다.",
-        "highlights": [
-            "지난달 대비 카페·간식 소비가 15% 증가했습니다.",
-            "주말 저녁 시간대 식비 결제가 집중되어 있습니다."
-        ],
-        "advice": "배달 및 카페 테이크아웃 횟수를 주 2회 줄이면 약 5만 원을 절약할 수 있습니다."
-    }
+    # 1) 기존 월별 집계 함수 그대로 재사용
+    monthly_summary = get_monthly_summary(month=month, db=db)
+
+    if monthly_summary.total_spent == 0:
+        raise HTTPException(status_code=404, detail=f"{month}에 해당하는 소비 데이터가 없습니다.")
+
+    # 2) AI 리포트 생성 함수에 넘기기 (dict 형태로 변환)
+    try:
+        result = generate_ai_report(monthly_summary.model_dump(mode="json"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI 리포트 생성 실패: {str(e)}")
+
+    return schemas.AIReportResponse(
+        month=result.month,
+        summary=result.summary,
+        highlights=result.highlights,
+        advice=result.advice
+    )
