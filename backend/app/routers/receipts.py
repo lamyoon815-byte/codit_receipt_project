@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Dict
 from collections import defaultdict
+from datetime import datetime, timedelta
 import shutil
 import tempfile
 import os
@@ -217,3 +218,180 @@ def get_ai_report(month: str = "2026-08", db: Session = Depends(get_db)):
         highlights=result.highlights,
         advice=result.advice
     )
+
+# ==========================================
+# [신규 ①] 일/주/월 소비 금액 및 결제 횟수
+# ==========================================
+@router.get("/stats/summary", response_model=schemas.PeriodSummaryResponse)
+def get_period_summary(
+    period: str = Query("month", pattern="^(day|week|month)$", description="day, week, month 중 하나"),
+    date: str = Query(None, description="기준 날짜 YYYY-MM-DD (미입력 시 오늘)"),
+    db: Session = Depends(get_db)
+):
+    """
+    지정한 기간(일/주/월) 기준으로 총 소비 금액과 결제 횟수를 반환
+    """
+    ref_date = datetime.strptime(date, "%Y-%m-%d").date() if date else datetime.today().date()
+
+    if period == "day":
+        start = end = ref_date
+    elif period == "week":
+        start = ref_date - timedelta(days=ref_date.weekday())  # 그 주 월요일
+        end = start + timedelta(days=6)
+    else:  # month
+        start = ref_date.replace(day=1)
+        next_month = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+        end = next_month - timedelta(days=1)
+
+    receipts = db.query(models.Receipt).filter(
+        models.Receipt.date >= start.isoformat(),
+        models.Receipt.date <= end.isoformat()
+    ).all()
+
+    return schemas.PeriodSummaryResponse(
+        period=period,
+        start_date=start.isoformat(),
+        end_date=end.isoformat(),
+        total_spent=sum(r.total_amount for r in receipts),
+        payment_count=len(receipts)
+    )
+
+
+# ==========================================
+# [신규 ②] 기간별 소비 추이 (그래프용 시계열)
+# ==========================================
+@router.get("/stats/trend", response_model=schemas.TrendResponse)
+def get_trend(
+    period: str = Query("month", pattern="^(day|week|month)$"),
+    count: int = Query(6, ge=1, le=24, description="조회할 구간 개수"),
+    db: Session = Depends(get_db)
+):
+    """
+    최근 N개 구간(일/주/월)의 소비 금액 추이를 시계열로 반환
+    """
+    today = datetime.today().date()
+    points = []
+
+    if period == "month":
+        for i in range(count - 1, -1, -1):
+            year, month = today.year, today.month - i
+            while month <= 0:
+                month += 12
+                year -= 1
+            label = f"{year}-{month:02d}"
+            receipts = db.query(models.Receipt).filter(models.Receipt.date.startswith(label)).all()
+            points.append(schemas.TrendPoint(label=label, amount=sum(r.total_amount for r in receipts)))
+
+    elif period == "week":
+        for i in range(count - 1, -1, -1):
+            week_start = today - timedelta(days=today.weekday() + i * 7)
+            week_end = week_start + timedelta(days=6)
+            receipts = db.query(models.Receipt).filter(
+                models.Receipt.date >= week_start.isoformat(),
+                models.Receipt.date <= week_end.isoformat()
+            ).all()
+            points.append(schemas.TrendPoint(label=week_start.isoformat(), amount=sum(r.total_amount for r in receipts)))
+
+    else:  # day
+        for i in range(count - 1, -1, -1):
+            day = today - timedelta(days=i)
+            receipts = db.query(models.Receipt).filter(models.Receipt.date == day.isoformat()).all()
+            points.append(schemas.TrendPoint(label=day.isoformat(), amount=sum(r.total_amount for r in receipts)))
+
+    return schemas.TrendResponse(period=period, points=points)
+
+
+# ==========================================
+# [신규 ③] 전월 대비 전체/카테고리별 증감률
+# ==========================================
+@router.get("/stats/comparison", response_model=schemas.ComparisonResponse)
+def get_comparison(month: str = "2026-08", db: Session = Depends(get_db)):
+    """
+    지정한 월과 그 전월을 비교하여 전체 및 카테고리별 증감률(%) 반환
+    """
+    year, mon = map(int, month.split("-"))
+    prev_year, prev_mon = (year - 1, 12) if mon == 1 else (year, mon - 1)
+    prev_month = f"{prev_year}-{prev_mon:02d}"
+
+    current = get_monthly_summary(month=month, db=db)
+    previous = get_monthly_summary(month=prev_month, db=db)
+
+    def rate(cur: float, prev: float) -> float:
+        if prev == 0:
+            return 100.0 if cur > 0 else 0.0
+        return round((cur - prev) / prev * 100, 1)
+
+    prev_map = {c.category: c.amount for c in previous.category_breakdown}
+    cur_map = {c.category: c.amount for c in current.category_breakdown}
+
+    category_changes = []
+    for cat in set(prev_map) | set(cur_map):
+        cur_amt = cur_map.get(cat, 0.0)
+        prev_amt = prev_map.get(cat, 0.0)
+        category_changes.append(schemas.CategoryChange(
+            category=cat,
+            current_amount=cur_amt,
+            previous_amount=prev_amt,
+            change_rate=rate(cur_amt, prev_amt)
+        ))
+    category_changes.sort(key=lambda x: x.current_amount, reverse=True)
+
+    return schemas.ComparisonResponse(
+        current_month=month,
+        previous_month=prev_month,
+        total_current=current.total_spent,
+        total_previous=previous.total_spent,
+        total_change_rate=rate(current.total_spent, previous.total_spent),
+        category_changes=category_changes
+    )
+
+
+# ==========================================
+# [신규 ④] 자주 구매한 품목 TOP N
+# ==========================================
+@router.get("/stats/top-items", response_model=schemas.TopItemsResponse)
+def get_top_items(month: str = "2026-08", limit: int = 5, db: Session = Depends(get_db)):
+    """
+    지정한 월에 가장 자주(횟수 기준) 구매한 품목 TOP N 반환
+    """
+    receipts = db.query(models.Receipt).filter(models.Receipt.date.startswith(month)).all()
+
+    item_stats: Dict[str, Dict[str, float]] = defaultdict(lambda: {"count": 0, "total_amount": 0.0})
+    for r in receipts:
+        for item in r.items:
+            item_stats[item.name]["count"] += 1
+            item_stats[item.name]["total_amount"] += item.price
+
+    top_items = sorted(
+        [schemas.TopItem(name=name, count=int(s["count"]), total_amount=s["total_amount"])
+         for name, s in item_stats.items()],
+        key=lambda x: x.count,
+        reverse=True
+    )[:limit]
+
+    return schemas.TopItemsResponse(month=month, items=top_items)
+
+
+# ==========================================
+# [신규 ⑤] 자주 방문한 매장 TOP N
+# ==========================================
+@router.get("/stats/top-stores", response_model=schemas.TopStoresResponse)
+def get_top_stores(month: str = "2026-08", limit: int = 5, db: Session = Depends(get_db)):
+    """
+    지정한 월에 가장 자주 방문한 매장 TOP N 반환
+    """
+    receipts = db.query(models.Receipt).filter(models.Receipt.date.startswith(month)).all()
+
+    store_stats: Dict[str, Dict[str, float]] = defaultdict(lambda: {"visit_count": 0, "total_amount": 0.0})
+    for r in receipts:
+        store_stats[r.store_name]["visit_count"] += 1
+        store_stats[r.store_name]["total_amount"] += r.total_amount
+
+    top_stores = sorted(
+        [schemas.TopStore(store_name=name, visit_count=int(s["visit_count"]), total_amount=s["total_amount"])
+         for name, s in store_stats.items()],
+        key=lambda x: x.visit_count,
+        reverse=True
+    )[:limit]
+
+    return schemas.TopStoresResponse(month=month, stores=top_stores)
