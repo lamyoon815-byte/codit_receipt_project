@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import { normalizeCategory } from '../constants/categories';
 import {
-  getAIReport,
   getMonthlyComparison,
   getMonthlySummary,
   getPeriodSummary,
   getReceipts,
   getSpendingTrend,
 } from '../services/receiptApi';
-import type { AIReportResponse, PeriodSummaryResponse, ReceiptResponse } from '../types/api';
+import type { PeriodSummaryResponse, ReceiptResponse } from '../types/api';
 import type { Expense, ExpenseCategory } from '../types/expense';
 
 export interface CategoryChartDatum { category: ExpenseCategory; value: number; percentage: number }
@@ -27,7 +26,6 @@ interface DashboardState {
   trendData: TrendChartDatum[];
   summary: DashboardSummary;
   recentExpenses: Expense[];
-  aiReport: AIReportResponse | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -76,7 +74,7 @@ function fulfilled<T>(result: PromiseSettledResult<T>): T | null {
 
 export function useDashboardCharts(): DashboardState {
   const [state, setState] = useState<DashboardState>({
-    categoryData: [], trendData: [], summary: EMPTY_SUMMARY, recentExpenses: [], aiReport: null,
+    categoryData: [], trendData: [], summary: EMPTY_SUMMARY, recentExpenses: [],
     isLoading: true, error: null,
   });
 
@@ -93,11 +91,10 @@ export function useDashboardCharts(): DashboardState {
         getPeriodSummary('month', today, controller.signal),
         getMonthlyComparison(month, controller.signal),
         getReceipts(controller.signal),
-        getAIReport(month, controller.signal),
       ] as const);
 
       if (controller.signal.aborted) return;
-      const [monthlyResult, trendResult, dayResult, weekResult, monthResult, comparisonResult, receiptsResult, reportResult] = results;
+      const [monthlyResult, trendResult, dayResult, weekResult, monthResult, comparisonResult, receiptsResult] = results;
       const monthly = fulfilled(monthlyResult);
       const trend = fulfilled(trendResult);
       const comparison = fulfilled(comparisonResult);
@@ -117,7 +114,6 @@ export function useDashboardCharts(): DashboardState {
           previousMonthDifference: comparison ? Number(comparison.total_current) - Number(comparison.total_previous) : 0,
         },
         recentExpenses: receipts ? toRecentExpenses(receipts) : [],
-        aiReport: fulfilled(reportResult),
         isLoading: false,
         error: failedCount === results.length
           ? '백엔드에 연결할 수 없습니다. 서버와 CORS 설정을 확인해 주세요.'

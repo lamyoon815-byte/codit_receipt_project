@@ -3,6 +3,7 @@ import { AppLayout } from '../components/layout/AppLayout';
 import { AnalyticsPage } from '../pages/AnalyticsPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { ExpensesPage } from '../pages/ExpensesPage';
+import { InsightsPage } from '../pages/InsightsPage';
 import { LandingPage } from '../pages/LandingPage';
 import { ReceiptUploadPage } from '../pages/ReceiptUploadPage';
 
@@ -15,6 +16,7 @@ export function App() {
         <Route path="/receipts/new" element={<ReceiptUploadPage />} />
         <Route path="/expenses" element={<ExpensesPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/insights" element={<InsightsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

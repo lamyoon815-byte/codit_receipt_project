@@ -5,6 +5,7 @@ const links = [
   { to: '/receipts/new', label: '영수증 등록' },
   { to: '/expenses', label: '소비 내역' },
   { to: '/analytics', label: '소비 분석' },
+  { to: '/insights', label: '소비 인사이트' },
 ];
 
 export function AppLayout() {
