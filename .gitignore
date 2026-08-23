@@ -33,3 +33,5 @@ venv/
 data/
 ai/data/
 ai/models/
+
+backend/receipts.db
