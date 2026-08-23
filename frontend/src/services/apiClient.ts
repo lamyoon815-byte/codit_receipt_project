@@ -24,3 +24,33 @@ export async function apiGet<T>(path: string, params: Record<string, string | nu
   }
   return response.json() as Promise<T>;
 }
+
+async function parseResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    let message = `API 요청에 실패했습니다. (${response.status})`;
+    try {
+      const body = await response.json() as { message?: string; detail?: string };
+      message = body.message ?? body.detail ?? message;
+    } catch {
+      // JSON이 아닌 오류 응답에는 기본 메시지를 사용합니다.
+    }
+    throw new ApiError(response.status, message);
+  }
+  return response.json() as Promise<T>;
+}
+
+export async function apiPostJson<TResponse, TBody>(path: string, body: TBody): Promise<TResponse> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return parseResponse<TResponse>(response);
+}
+
+export async function apiPostFormData<T>(path: string, formData: FormData): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST', headers: { Accept: 'application/json' }, body: formData,
+  });
+  return parseResponse<T>(response);
+}

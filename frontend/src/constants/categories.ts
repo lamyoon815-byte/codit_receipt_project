@@ -1,5 +1,7 @@
 import type { CategoryMeta, ExpenseCategory } from '../types/expense';
 
+export type BackendCategory = 'FOOD' | 'CAFE' | 'DAILY' | 'SHOPPING' | 'TRANSPORT' | 'HEALTH' | 'CULTURE' | 'ETC';
+
 export const CATEGORY_META: Record<ExpenseCategory, CategoryMeta> = {
   food: { label: '식비', chart: '#F05A5A', background: '#FDECEC', text: '#C73D3D' },
   cafe: { label: '카페·간식', chart: '#F59E42', background: '#FFF4E5', text: '#D97706' },
@@ -9,6 +11,11 @@ export const CATEGORY_META: Record<ExpenseCategory, CategoryMeta> = {
   medical: { label: '의료·건강', chart: '#5367C7', background: '#ECEEFF', text: '#3E4EA1' },
   culture: { label: '문화·여가', chart: '#8B62D9', background: '#F3ECFF', text: '#6A42C1' },
   other: { label: '기타', chart: '#8A96A8', background: '#F1F3F6', text: '#5F6B7A' },
+};
+
+export const CATEGORY_API_CODE: Record<ExpenseCategory, BackendCategory> = {
+  food: 'FOOD', cafe: 'CAFE', living: 'DAILY', shopping: 'SHOPPING',
+  transport: 'TRANSPORT', medical: 'HEALTH', culture: 'CULTURE', other: 'ETC',
 };
 
 const CATEGORY_ALIASES: Record<string, ExpenseCategory> = {
@@ -28,5 +35,6 @@ export function normalizeCategory(category: string): ExpenseCategory {
 
 export const CATEGORIES = Object.entries(CATEGORY_META).map(([id, meta]) => ({
   id: id as ExpenseCategory,
+  apiCode: CATEGORY_API_CODE[id as ExpenseCategory],
   ...meta,
 }));

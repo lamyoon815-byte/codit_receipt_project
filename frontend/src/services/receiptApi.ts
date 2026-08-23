@@ -4,11 +4,12 @@ import type {
   MonthlySummaryResponse,
   PaginatedReceiptsResponse,
   PeriodSummaryResponse,
+  ReceiptCreateRequest,
   ReceiptResponse,
   TrendPeriod,
   TrendResponse,
 } from '../types/api';
-import { apiGet } from './apiClient';
+import { apiGet, apiPostFormData, apiPostJson } from './apiClient';
 
 const RECEIPTS_PATH = '/api/receipts';
 
@@ -34,4 +35,14 @@ export function getReceipts(signal?: AbortSignal) {
 
 export function getAIReport(month: string, signal?: AbortSignal) {
   return apiGet<AIReportResponse>(`${RECEIPTS_PATH}/report/ai`, { month }, signal);
+}
+
+export function analyzeReceipt(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiPostFormData<ReceiptCreateRequest>(`${RECEIPTS_PATH}/analyze`, formData);
+}
+
+export function createReceipt(receipt: ReceiptCreateRequest) {
+  return apiPostJson<ReceiptResponse, ReceiptCreateRequest>(`${RECEIPTS_PATH}/`, receipt);
 }

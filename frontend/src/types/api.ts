@@ -28,6 +28,19 @@ export interface ReceiptItemResponse {
   category: string;
 }
 
+export interface ReceiptCreateItem {
+  name: string;
+  price: number;
+  category: string;
+}
+
+export interface ReceiptCreateRequest {
+  store_name: string;
+  date: string;
+  total_amount: number;
+  items: ReceiptCreateItem[];
+}
+
 export interface ReceiptResponse {
   id: number;
   store_name: string;
