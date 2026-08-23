@@ -42,7 +42,10 @@ async def analyze_receipt(file: UploadFile = File(...)):
     try:
         result = analyze_receipt_image(tmp_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI 분석 실패: {str(e)}")
+        raise HTTPException(
+        status_code=500,
+        detail={"code": "AI_ANALYSIS_FAILED", "message": f"AI 분석 실패: {str(e)}"}
+    )
     finally:
         os.remove(tmp_path)
 
@@ -106,7 +109,10 @@ def get_receipt(receipt_id: int, db: Session = Depends(get_db)):
     """특정 영수증 상세 내역 조회"""
     db_receipt = db.query(models.Receipt).filter(models.Receipt.id == receipt_id).first()
     if not db_receipt:
-        raise HTTPException(status_code=404, detail="영수증을 찾을 수 없습니다.")
+        raise HTTPException(
+        status_code=404,
+        detail={"code": "RECEIPT_NOT_FOUND", "message": "영수증을 찾을 수 없습니다."}
+    )
     return db_receipt
 
 
@@ -116,7 +122,10 @@ def update_receipt(receipt_id: int, receipt_in: schemas.ReceiptUpdate, db: Sessi
     """영수증 상호명, 결제일, 품목 정보 수정"""
     db_receipt = db.query(models.Receipt).filter(models.Receipt.id == receipt_id).first()
     if not db_receipt:
-        raise HTTPException(status_code=404, detail="영수증을 찾을 수 없습니다.")
+        raise HTTPException(
+        status_code=404,
+        detail={"code": "RECEIPT_NOT_FOUND", "message": "영수증을 찾을 수 없습니다."}
+    )
 
     # 메타 정보 수정
     db_receipt.store_name = receipt_in.store_name
@@ -145,7 +154,10 @@ def delete_receipt(receipt_id: int, db: Session = Depends(get_db)):
     """영수증 및 하위 품목 완전 삭제"""
     db_receipt = db.query(models.Receipt).filter(models.Receipt.id == receipt_id).first()
     if not db_receipt:
-        raise HTTPException(status_code=404, detail="영수증을 찾을 수 없습니다.")
+        raise HTTPException(
+        status_code=404,
+        detail={"code": "RECEIPT_NOT_FOUND", "message": "영수증을 찾을 수 없습니다."}
+    )
     db.delete(db_receipt)
     db.commit()
     return None
@@ -204,14 +216,18 @@ def get_ai_report(month: str = "2026-08", db: Session = Depends(get_db)):
     monthly_summary = get_monthly_summary(month=month, db=db)
 
     if monthly_summary.total_spent == 0:
-        raise HTTPException(status_code=404, detail=f"{month}에 해당하는 소비 데이터가 없습니다.")
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NO_DATA_FOR_MONTH", "message": f"{month}에 해당하는 소비 데이터가 없습니다."}
+    )
 
-    # 2) AI 리포트 생성 함수에 넘기기 (dict 형태로 변환)
     try:
         result = generate_ai_report(monthly_summary.model_dump(mode="json"))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI 리포트 생성 실패: {str(e)}")
-
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "AI_REPORT_FAILED", "message": f"AI 리포트 생성 실패: {str(e)}"}
+    )
     return schemas.AIReportResponse(
         month=result.month,
         summary=result.summary,

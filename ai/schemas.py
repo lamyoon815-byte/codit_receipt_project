@@ -5,26 +5,26 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class CategoryEnum(str, Enum):
-    FOOD = "식비"
-    CAFE = "카페·간식"
-    DAILY = "생활·생필품"
-    SHOPPING = "쇼핑"
-    TRANSPORT = "교통"
-    HEALTH = "의료·건강"
-    CULTURE = "문화·여가"
-    ETC = "기타"
+    FOOD = "FOOD"
+    CAFE = "CAFE"
+    DAILY = "DAILY"
+    SHOPPING = "SHOPPING"
+    TRANSPORT = "TRANSPORT"
+    HEALTH = "HEALTH"
+    CULTURE = "CULTURE"
+    ETC = "ETC"
 
 
 class ReceiptItem(BaseModel):
     name: str = Field(..., min_length=1)
-    price: float = Field(..., ge=0)
+    price: int = Field(..., ge=0)
     category: CategoryEnum = CategoryEnum.ETC
 
 
 class ReceiptAnalysisResult(BaseModel):
     store_name: str = Field(..., min_length=1)
     date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
-    total_amount: float = Field(..., ge=0)
+    total_amount: int = Field(..., ge=0)
     items: List[ReceiptItem] = Field(default_factory=list)
 
     @field_validator("store_name")
@@ -35,13 +35,13 @@ class ReceiptAnalysisResult(BaseModel):
 
 class CategoryStat(BaseModel):
     category: CategoryEnum
-    amount: float = Field(..., ge=0)
+    amount: int = Field(..., ge=0)
     percentage: float = Field(..., ge=0, le=100)
 
 
 class MonthlySummaryInput(BaseModel):
     month: str = Field(..., pattern=r"^\d{4}-\d{2}$")
-    total_spent: float = Field(..., ge=0)
+    total_spent: int = Field(..., ge=0)
     category_breakdown: List[CategoryStat] = Field(default_factory=list)
 
 
