@@ -57,7 +57,9 @@ def analyze_receipt_image(
     )
 
     data = json.loads(response.output_text)
-    return ReceiptAnalysisResult.model_validate(data)
+    result = ReceiptAnalysisResult.model_validate(data)
+    result.items = [item for item in result.items if item.price > 0]
+    return result
 
 
 def main() -> None:
