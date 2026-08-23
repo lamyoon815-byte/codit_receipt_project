@@ -1,6 +1,5 @@
 import { CalendarDays, ReceiptText, TrendingUp, WalletCards } from 'lucide-react';
 import { Card } from '../components/common/Card';
-import { AIInsights } from '../features/dashboard/AIInsights';
 import { CategoryDonutChart } from '../features/dashboard/CategoryDonutChart';
 import { RecentExpenses } from '../features/dashboard/RecentExpenses';
 import { SpendingTrendChart } from '../features/dashboard/SpendingTrendChart';
@@ -9,7 +8,7 @@ import { useDashboardCharts } from '../hooks/useDashboardCharts';
 import { formatWon } from '../utils/currency';
 
 export function DashboardPage() {
-  const { categoryData, trendData, summary, recentExpenses, aiReport, isLoading, error } = useDashboardCharts();
+  const { categoryData, trendData, summary, recentExpenses, isLoading, error } = useDashboardCharts();
   const chartLoading = isLoading ? <div className="chart-state">소비 데이터를 불러오는 중입니다.</div> : null;
   const difference = summary.previousMonthDifference;
 
@@ -41,9 +40,6 @@ export function DashboardPage() {
         </Card>
         <Card title="카테고리별 소비 비율">
           {chartLoading ?? <CategoryDonutChart data={categoryData} />}
-        </Card>
-        <Card title="AI 소비 인사이트" className="insights">
-          <AIInsights report={aiReport} isLoading={isLoading} />
         </Card>
       </div>
       <Card title="최근 소비 내역">
