@@ -100,3 +100,73 @@ class AIReportResponse(BaseModel):
         ]
     )
     advice: str = Field(..., example="배달 및 카페 테이크아웃 횟수를 주 2회 줄이면 약 5만 원을 절약할 수 있습니다.")
+
+# ==========================================
+# 5. [신규] 기간별 통계 (일/주/월)
+# ==========================================
+class PeriodSummaryResponse(BaseModel):
+    period: str = Field(..., example="month")
+    start_date: str = Field(..., example="2026-08-01")
+    end_date: str = Field(..., example="2026-08-31")
+    total_spent: float = Field(..., example=450000.0)
+    payment_count: int = Field(..., example=12)
+
+
+# ==========================================
+# 6. [신규] 기간별 소비 추이 (그래프용)
+# ==========================================
+class TrendPoint(BaseModel):
+    label: str = Field(..., example="2026-08")  # month면 "2026-08", week/day면 날짜
+    amount: float = Field(..., example=120000.0)
+
+
+class TrendResponse(BaseModel):
+    period: str = Field(..., example="month")
+    points: List[TrendPoint]
+
+
+# ==========================================
+# 7. [신규] 전월 대비 증감률
+# ==========================================
+class CategoryChange(BaseModel):
+    category: CategoryEnum
+    current_amount: float
+    previous_amount: float
+    change_rate: float = Field(..., example=15.0)  # % 단위, 음수면 감소
+
+
+class ComparisonResponse(BaseModel):
+    current_month: str = Field(..., example="2026-08")
+    previous_month: str = Field(..., example="2026-07")
+    total_current: float
+    total_previous: float
+    total_change_rate: float = Field(..., example=8.5)
+    category_changes: List[CategoryChange]
+
+
+# ==========================================
+# 8. [신규] 자주 구매한 품목 TOP N
+# ==========================================
+class TopItem(BaseModel):
+    name: str = Field(..., example="아이스 아메리카노")
+    count: int = Field(..., example=7)
+    total_amount: float = Field(..., example=38500.0)
+
+
+class TopItemsResponse(BaseModel):
+    month: str = Field(..., example="2026-08")
+    items: List[TopItem]
+
+
+# ==========================================
+# 9. [신규] 자주 방문한 매장 TOP N
+# ==========================================
+class TopStore(BaseModel):
+    store_name: str = Field(..., example="스타벅스 강남점")
+    visit_count: int = Field(..., example=5)
+    total_amount: float = Field(..., example=67500.0)
+
+
+class TopStoresResponse(BaseModel):
+    month: str = Field(..., example="2026-08")
+    stores: List[TopStore]
