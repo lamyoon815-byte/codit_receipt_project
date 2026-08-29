@@ -45,7 +45,7 @@ export function InsightsPage() {
         <div><h1>소비 인사이트</h1><p>AI 분석으로 발견한 당신의 소비 습관과 맞춤 인사이트를 확인해보세요.</p></div>
         <label className="month-select">
           <select value={selectedMonth} onChange={(event) => { setIsLoading(true); setSelectedMonth(Number(event.target.value)); }} aria-label="분석 월 선택">
-            {monthOptions.map((month) => <option key={month} value={month}>{month}월</option>)}
+            {monthOptions.map((month) => <option key={month} value={month}>{year}년 {month}월</option>)}
           </select>
           <ChevronDown size={18} />
         </label>

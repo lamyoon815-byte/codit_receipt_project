@@ -1,8 +1,8 @@
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Download, Search } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Download, Search, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CategoryBadge } from '../components/common/CategoryBadge';
 import { CATEGORIES, normalizeCategory } from '../constants/categories';
-import { getReceipts } from '../services/receiptApi';
+import { deleteReceipt, getReceipts } from '../services/receiptApi';
 import type { ReceiptResponse } from '../types/api';
 import type { ExpenseCategory } from '../types/expense';
 import { formatWon } from '../utils/currency';
@@ -10,6 +10,13 @@ import { formatWon } from '../utils/currency';
 const PAGE_SIZE = 7;
 
 function getMonthRange() {
+  const lastRegisteredDate = sessionStorage.getItem('spendly:lastRegisteredDate');
+  if (lastRegisteredDate && /^\d{4}-\d{2}-\d{2}$/.test(lastRegisteredDate)) {
+    sessionStorage.removeItem('spendly:lastRegisteredDate');
+    const [year, month] = lastRegisteredDate.split('-').map(Number);
+    const end = new Date(year, month, 0).getDate();
+    return { start: `${year}-${String(month).padStart(2, '0')}-01`, end: `${year}-${String(month).padStart(2, '0')}-${String(end).padStart(2, '0')}` };
+  }
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
@@ -33,10 +40,7 @@ function getReceiptCategory(receipt: ReceiptResponse): ExpenseCategory {
 }
 
 function formatReceiptDate(receipt: ReceiptResponse) {
-  if (!receipt.created_at) return receipt.date;
-  const createdAt = new Date(receipt.created_at);
-  if (Number.isNaN(createdAt.getTime())) return receipt.date;
-  return `${receipt.date} ${createdAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+  return receipt.date;
 }
 
 export function ExpensesPage() {
@@ -51,6 +55,7 @@ export function ExpensesPage() {
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -94,7 +99,7 @@ export function ExpensesPage() {
   function exportCsv() {
     const header = ['날짜', '상호명', '카테고리', '품목 수', '금액'];
     const rows = filteredReceipts.map((receipt) => [
-      formatReceiptDate(receipt), receipt.store_name,
+      `="${formatReceiptDate(receipt)}"`, receipt.store_name,
       CATEGORIES.find((item) => item.id === getReceiptCategory(receipt))?.label ?? '기타',
       String(receipt.items.length), String(receipt.total_amount),
     ]);
@@ -105,6 +110,21 @@ export function ExpensesPage() {
     anchor.download = `spendly-expenses-${startDate}-${endDate}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function handleDelete(receipt: ReceiptResponse) {
+    if (!window.confirm(`${receipt.store_name} 내역을 삭제할까요? 삭제한 내역은 복구할 수 없습니다.`)) return;
+    setDeletingId(receipt.id);
+    setError(null);
+    try {
+      await deleteReceipt(receipt.id);
+      setReceipts((current) => current.filter((item) => item.id !== receipt.id));
+      setExpandedId(null);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : '소비 내역을 삭제하지 못했습니다.');
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -155,7 +175,7 @@ export function ExpensesPage() {
                       <button className="expense-row" type="button" onClick={() => setExpandedId(expanded ? null : receipt.id)}>
                         <time>{formatReceiptDate(receipt)}</time><strong>{receipt.store_name}</strong><span><CategoryBadge category={receiptCategory} /></span><span>{receipt.items.length}개</span><b>{formatWon(Number(receipt.total_amount))}</b><ChevronRight className={expanded ? 'expanded' : ''} size={21} />
                       </button>
-                      {expanded && <div className="expense-row-detail">{receipt.items.map((item, index) => <div key={`${item.name}-${index}`}><span>{item.name}</span><CategoryBadge category={normalizeCategory(item.category)} /><strong>{formatWon(Number(item.price))}</strong></div>)}</div>}
+                      {expanded && <div className="expense-row-detail"><div className="expense-detail-items">{receipt.items.map((item, index) => <div key={`${item.name}-${index}`}><span>{item.name}</span><CategoryBadge category={normalizeCategory(item.category)} /><strong>{formatWon(Number(item.price))}</strong></div>)}</div><button className="expense-delete-button" type="button" disabled={deletingId === receipt.id} onClick={() => void handleDelete(receipt)}><Trash2 size={17} />{deletingId === receipt.id ? '삭제 중...' : '내역 삭제'}</button></div>}
                     </td>
                   </tr>
                 );

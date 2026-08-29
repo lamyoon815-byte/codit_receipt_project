@@ -48,6 +48,7 @@ export function ReceiptUploadPage() {
   const [receipt, setReceipt] = useState<EditableReceipt | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
@@ -61,6 +62,7 @@ export function ReceiptUploadPage() {
 
   async function runAnalysis(imageFile: File) {
     setIsAnalyzing(true);
+    setIsRegistered(false);
     setError(null);
     setSuccess(null);
     try {
@@ -162,20 +164,34 @@ export function ReceiptUploadPage() {
 
   async function handleSave() {
     if (!receipt || receipt.items.length === 0) return;
+    const storeName = receipt.storeName.trim();
+    const normalizedItems = receipt.items.map((item) => ({
+      name: item.name.trim(),
+      price: Math.round(Number(item.price)),
+      category: CATEGORY_API_CODE[receipt.category],
+    }));
+    const totalAmount = Math.round(Number(receipt.totalAmount));
+
+    if (!storeName || !receipt.date || !Number.isFinite(totalAmount) || totalAmount < 0) {
+      setError('상호명, 날짜, 총 금액을 확인해 주세요.');
+      return;
+    }
+    if (normalizedItems.some((item) => !item.name || !Number.isFinite(item.price) || item.price < 0)) {
+      setError('품목명과 품목 금액을 확인해 주세요.');
+      return;
+    }
     setIsSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      await createReceipt({
-        store_name: receipt.storeName,
+      const savedReceipt = await createReceipt({
+        store_name: storeName,
         date: receipt.date,
-        total_amount: Number(receipt.totalAmount),
-        items: receipt.items.map((item) => ({
-          name: item.name,
-          price: Number(item.price),
-          category: CATEGORY_API_CODE[receipt.category],
-        })),
+        total_amount: totalAmount,
+        items: normalizedItems,
       });
+      sessionStorage.setItem('spendly:lastRegisteredDate', savedReceipt.date);
+      setIsRegistered(true);
       setSuccess('소비 내역에 영수증을 등록했습니다.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : '영수증을 저장하지 못했습니다.');
@@ -222,7 +238,7 @@ export function ReceiptUploadPage() {
         <header className="receipt-result-header">
           <h1>추출된 정보</h1>
           <button type="button" disabled={!file || isAnalyzing} onClick={() => file && void runAnalysis(file)}>
-            <RefreshCw size={17} className={isAnalyzing ? 'spin' : ''} /> 다시 인식하기
+            <RefreshCw size={17} /> 다시 인식하기
           </button>
         </header>
 
@@ -268,9 +284,9 @@ export function ReceiptUploadPage() {
 
             {error && <p className="receipt-message error" role="alert">{error}</p>}
             {success && <p className="receipt-message success" role="status">{success}</p>}
-            <button className="register-receipt-button" type="button" disabled={isSaving} onClick={() => void handleSave()}>
+            <button className={`register-receipt-button ${isRegistered ? 'registered' : ''}`} type="button" disabled={isSaving || isRegistered} onClick={() => void handleSave()}>
               {isSaving ? <LoaderCircle className="spin" size={20} /> : <FileCheck2 size={20} />}
-              {isSaving ? '등록 중...' : '등록하기'}
+              {isSaving ? '등록 중...' : isRegistered ? '등록완료' : '등록하기'}
             </button>
           </>
         ) : (

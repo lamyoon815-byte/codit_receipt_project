@@ -23,6 +23,7 @@ export interface DashboardSummary {
 
 interface DashboardState {
   categoryData: CategoryChartDatum[];
+  weeklyCategoryData: CategoryChartDatum[];
   trendData: TrendChartDatum[];
   summary: DashboardSummary;
   recentExpenses: Expense[];
@@ -68,13 +69,38 @@ function toRecentExpenses(response: ReceiptResponse[] | { items: ReceiptResponse
     }));
 }
 
+function toWeeklyCategoryData(
+  response: ReceiptResponse[] | { items: ReceiptResponse[] },
+  startDate: string,
+  endDate: string,
+): CategoryChartDatum[] {
+  const receipts = Array.isArray(response) ? response : response.items;
+  const totals = new Map<ExpenseCategory, number>();
+
+  receipts
+    .filter((receipt) => receipt.date >= startDate && receipt.date <= endDate)
+    .forEach((receipt) => receipt.items.forEach((item) => {
+      const category = normalizeCategory(item.category);
+      totals.set(category, (totals.get(category) ?? 0) + Number(item.price || 0));
+    }));
+
+  const total = [...totals.values()].reduce((sum, amount) => sum + amount, 0);
+  return [...totals.entries()]
+    .map(([category, value]) => ({
+      category,
+      value,
+      percentage: total > 0 ? (value / total) * 100 : 0,
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
 function fulfilled<T>(result: PromiseSettledResult<T>): T | null {
   return result.status === 'fulfilled' ? result.value : null;
 }
 
-export function useDashboardCharts(): DashboardState {
+export function useDashboardCharts(monthOverride?: string): DashboardState {
   const [state, setState] = useState<DashboardState>({
-    categoryData: [], trendData: [], summary: EMPTY_SUMMARY, recentExpenses: [],
+    categoryData: [], weeklyCategoryData: [], trendData: [], summary: EMPTY_SUMMARY, recentExpenses: [],
     isLoading: true, error: null,
   });
 
@@ -82,7 +108,9 @@ export function useDashboardCharts(): DashboardState {
     const controller = new AbortController();
 
     async function loadDashboard() {
-      const { today, month } = getKoreanDateParts();
+      const current = getKoreanDateParts();
+      const month = monthOverride ?? current.month;
+      const today = monthOverride ? `${month}-01` : current.today;
       const results = await Promise.allSettled([
         getMonthlySummary(month, controller.signal),
         getSpendingTrend('day', 7, controller.signal),
@@ -99,16 +127,20 @@ export function useDashboardCharts(): DashboardState {
       const trend = fulfilled(trendResult);
       const comparison = fulfilled(comparisonResult);
       const receipts = fulfilled(receiptsResult);
+      const week = fulfilled(weekResult);
       const failedCount = results.filter((result) => result.status === 'rejected').length;
 
       setState({
         categoryData: monthly?.category_breakdown.map((item) => ({
           category: normalizeCategory(item.category), value: Number(item.amount), percentage: Number(item.percentage),
         })) ?? [],
+        weeklyCategoryData: receipts && week
+          ? toWeeklyCategoryData(receipts, week.start_date, week.end_date)
+          : [],
         trendData: trend?.points.map((point) => ({ label: point.label, amount: Number(point.amount) })) ?? [],
         summary: {
           today: fulfilled(dayResult),
-          week: fulfilled(weekResult),
+          week,
           month: fulfilled(monthResult),
           previousMonthChange: comparison?.total_change_rate ?? null,
           previousMonthDifference: comparison ? Number(comparison.total_current) - Number(comparison.total_previous) : 0,
@@ -125,7 +157,7 @@ export function useDashboardCharts(): DashboardState {
 
     void loadDashboard();
     return () => controller.abort();
-  }, []);
+  }, [monthOverride]);
 
   return state;
 }

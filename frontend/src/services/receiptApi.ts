@@ -9,7 +9,7 @@ import type {
   TrendPeriod,
   TrendResponse,
 } from '../types/api';
-import { apiGet, apiPostFormData, apiPostJson } from './apiClient';
+import { apiDelete, apiGet, apiPostFormData, apiPostJson } from './apiClient';
 
 const RECEIPTS_PATH = '/api/receipts';
 
@@ -45,4 +45,8 @@ export function analyzeReceipt(file: File) {
 
 export function createReceipt(receipt: ReceiptCreateRequest) {
   return apiPostJson<ReceiptResponse, ReceiptCreateRequest>(`${RECEIPTS_PATH}/`, receipt);
+}
+
+export function deleteReceipt(receiptId: number) {
+  return apiDelete(`${RECEIPTS_PATH}/${receiptId}`);
 }
